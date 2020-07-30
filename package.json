@@ -1,5 +1,5 @@
 {
-  "name": "cloud-sql-restore",
+  "name": "cloudsql-restore",
   "version": "1.0.0",
   "description": "Restore SQL backups across projects",
   "main": "index.js",
