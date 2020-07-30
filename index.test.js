@@ -12,8 +12,6 @@ const { expect } = chai;
 
 const sourceProjectId = 'dummy-source-project';
 const sourceInstanceId = 'dummy-source-instance';
-// const sourceProjectId = 'houston-production-au';
-// const sourceInstanceId = 'houston-production-au';
 const targetProjectId = 'dummy-target-project';
 const targetInstanceId = 'dummy-target-instance';
 
@@ -21,15 +19,24 @@ const backupList = [
 	{
 		id: '1',
 		startTime: '2020-07-27T14:35:27.206Z',
+		status: 'SUCCESSFUL',
 	},
 	{
 		// Most recent
 		id: '2',
 		startTime: '2020-07-28T14:35:27.206Z',
+		status: 'SUCCESSFUL',
 	},
 	{
 		id: '3',
 		startTime: '2020-07-26T14:35:27.206Z',
+		status: 'SUCCESSFUL',
+	},
+	{
+		// Most recent, but failed
+		id: '4',
+		startTime: '2020-07-29T14:35:27.206Z',
+		status: 'FAILED',
 	},
 ];
 
@@ -38,7 +45,6 @@ describe('CloudSQLRestore', () => {
 	before(() => {
 		restoreHelper = new SqlRestore();
 		restoreHelper.authorizeJwt('./test-service-account.json');
-		// restoreHelper.authorizeJwt('./houston-production-au-017c68c16d66.json');
 	});
 
 	describe('listBackups', () => {

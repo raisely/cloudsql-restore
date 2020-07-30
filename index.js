@@ -15,14 +15,12 @@ class SqlRestore {
 	 * @param {string} path Path to json service key
 	 */
 	authorizeJwt(path) {
-		const serviceAccount = JSON.parse(fs.readFileSync(path, "utf8"));
+		const serviceAccount = JSON.parse(fs.readFileSync(path, 'utf8'));
 		const googleJWTClient = new JWT(
 			serviceAccount.client_email,
 			null,
 			serviceAccount.private_key,
-			[
-				'https://www.googleapis.com/auth/cloud-platform',
-			],
+			['https://www.googleapis.com/auth/cloud-platform'],
 			null
 		);
 
@@ -33,12 +31,15 @@ class SqlRestore {
 	 * List all backups for an instance
 	 * @param {string} opts.projectId
 	 * @param {string} opts.instanceId
-	 * @returns {unclear}
+	 * @returns {object[]} List of backup runs for the instance
 	 */
 	async listBackups({ projectId, instanceId }) {
 		const url = `https://www.googleapis.com/sql/v1beta4/projects/${projectId}/instances/${instanceId}/backupRuns`;
 		try {
-			const response = await this.googleClient.request({ url, method: "GET" });
+			const response = await this.googleClient.request({
+				url,
+				method: 'GET',
+			});
 			return response.data.items;
 		} catch (error) {
 			console.log(error);
@@ -72,32 +73,31 @@ class SqlRestore {
 			},
 		};
 
-		return this.googleClient.request({ url, data, method: "POST" });
+		return this.googleClient.request({ url, data, method: 'POST' });
 	}
 
 	/**
-	 * Shortcut to find the latest backup from the source and restore it to target
+	 * Shortcut to find the latest successful backup from the source and restore it to target
 	 * @param {string} opts.sourceProjectId
 	 * @param {string} opts.targetProjectId
 	 * @param {string} opts.sourceInstanceId
 	 * @param {string} opts.targetInstanceId
 	 */
 	async restoreLatestBackup(opts) {
-		const {
-			sourceProjectId,
-			sourceInstanceId,
-		} = opts;
+		const { sourceProjectId, sourceInstanceId } = opts;
 
 		const backups = await this.listBackups({
 			projectId: sourceProjectId,
 			instanceId: sourceInstanceId,
 		});
 		if (!backups.length) {
-			throw new Error("No backups were found on the source, cannot restore");
+			throw new Error(
+				'No backups were found on the source, cannot restore'
+			);
 		}
-		const sortedBackups = backups.sort((a, b) =>
-			a.startTime > b.startTime ? -1 : 1
-		);
+		const sortedBackups = backups
+			.filter((b) => b.status === 'SUCCESSFUL')
+			.sort((a, b) => (a.startTime > b.startTime ? -1 : 1));
 		return this.restoreBackup({
 			...opts,
 			backupRunId: sortedBackups[0].id,
