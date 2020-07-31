@@ -42,7 +42,7 @@ class SqlRestore {
 			});
 			return response.data.items;
 		} catch (error) {
-			console.log(error);
+			console.error(error);
 			throw error;
 		}
 	}
@@ -73,7 +73,12 @@ class SqlRestore {
 			},
 		};
 
-		return this.googleClient.request({ url, data, method: 'POST' });
+		const result = await this.googleClient.request({
+			url,
+			data,
+			method: 'POST',
+		});
+		return result.data;
 	}
 
 	/**
@@ -82,6 +87,7 @@ class SqlRestore {
 	 * @param {string} opts.targetProjectId
 	 * @param {string} opts.sourceInstanceId
 	 * @param {string} opts.targetInstanceId
+	 * @returns {object} An operation object
 	 */
 	async restoreLatestBackup(opts) {
 		const { sourceProjectId, sourceInstanceId } = opts;
@@ -102,6 +108,43 @@ class SqlRestore {
 			...opts,
 			backupRunId: sortedBackups[0].id,
 		});
+	}
+
+	/**
+	 * Get operations for a project (and optionally an instance)
+	 * @param {string} opts.projectId
+	 * @param {string} opts.instanceId optional
+	 * @returns {object[]} Operations
+	 */
+	async listOperations({ projectId, instanceId, maxResults }) {
+		if (!maxResults) maxResults = 10;
+		let url = `https://www.googleapis.com/sql/v1beta4/projects/${projectId}/operations?maxResults=${maxResults}`;
+		if (instanceId) url += `&instance=${instanceId}`;
+		const operations = await this.googleClient.request({
+			url,
+			method: 'GET',
+		});
+		return operations.data.items;
+	}
+
+	/**
+	 * Check the status of a restore operation
+	 * @param {object} operation Returned by restore
+	 * @returns {object} Updated operation
+	 * @throws {Error} if the operation contains an error
+	 */
+	async checkOperationStatus(operation) {
+		const url = operation.selfLink;
+		const update = await this.googleClient.request({ url, method: 'GET' });
+
+		const data = update.data;
+
+		if (data.error) {
+			const error = new Error(data.error[0].errors[0].message);
+			error.original = data.error;
+			throw error;
+		}
+		return data;
 	}
 }
 

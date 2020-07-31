@@ -40,8 +40,40 @@ const backupList = [
 	},
 ];
 
+const errorMessage = 'Something bad happened, your backup was not restored';
+
+const operationInProgress = {
+	kind: 'restore',
+	status: 'RUNNING',
+	error: null,
+	operationType: 'RESTORE_VOLUME',
+	selfLink: `https://www.googleapis.com/sql/v1beta4/projects/${targetProjectId}/operations/1234`,
+	targetProject: targetProjectId,
+};
+
+const operationSuccess = {
+	...operationInProgress,
+	status: 'DONE',
+};
+
+const operationFailed = {
+	...operationSuccess,
+	status: 'DONE',
+	error: [{
+		"kind": 'sql#operationErrors',
+		"errors": [{
+			"kind": 'bad',
+			"code": 'bad-thing',
+			"message": errorMessage,
+		}],
+	}],
+};
+
 describe('CloudSQLRestore', () => {
 	let restoreHelper;
+	let nockResult;
+	let restoreOperation;
+
 	before(() => {
 		restoreHelper = new SqlRestore();
 		restoreHelper.authorizeJwt('./test-service-account.json');
@@ -62,10 +94,9 @@ describe('CloudSQLRestore', () => {
 	});
 
 	describe('restoreBackup', () => {
-		let nockResult;
 		before(async () => {
 			nockResult = nockRestore(targetProjectId, targetInstanceId);
-			await restoreHelper.restoreBackup({
+			restoreOperation = await restoreHelper.restoreBackup({
 				sourceProjectId,
 				sourceInstanceId,
 				targetProjectId,
@@ -73,38 +104,81 @@ describe('CloudSQLRestore', () => {
 				backupRunId: '1',
 			});
 		});
-		it('restores specified backup', () => {
-			expect(nockResult.body).to.deep.eq({
-				restoreBackupContext: {
-					backupRunId: '1',
-					project: sourceProjectId,
-					instanceId: sourceInstanceId,
-				}
-			});
-		});
+		itStartsRestore('1');
 	});
 	describe('restoreLatestBackup', () => {
-		let nockResult;
 		before(async () => {
 			nockList(sourceProjectId, sourceInstanceId);
 			nockResult = nockRestore(targetProjectId, targetInstanceId);
-			await restoreHelper.restoreLatestBackup({
+			restoreOperation = await restoreHelper.restoreLatestBackup({
 				sourceProjectId,
 				sourceInstanceId,
 				targetProjectId,
 				targetInstanceId,
 			});
 		});
-		it('restores the latest backup', () => {
+		itStartsRestore(backupList[1].id);
+	});
+
+	describe('listOperations', () => {
+		before(async () => {
+			nockListOperations(targetProjectId, targetInstanceId);
+			restoreOperation = await restoreHelper.listOperations({
+				projectId: targetProjectId,
+				instanceId: targetInstanceId,
+			});
+		});
+		it('lists operations', () => {
+			expect(restoreOperation).to.deep.eq([
+				operationSuccess,
+				operationInProgress,
+				operationFailed,
+			]);
+		});
+	});
+
+	describe('checkOperationStatus', () => {
+		describe('WHEN operation is complete', () => {
+			before(async () => {
+				nockOperation(targetProjectId, operationSuccess);
+				restoreOperation = await restoreHelper.checkOperationStatus(operationInProgress);
+			});
+			itReturnsOperation(operationSuccess);
+		})
+		describe('WHEN operation has error', () => {
+			before(() => {
+				nockOperation(targetProjectId, operationFailed);
+			});
+			it('throws error', async () => {
+				let error;
+				try {
+					await restoreHelper.checkOperationStatus(operationInProgress);
+				} catch (e) {
+					console.error(e);
+					error = e;
+				}
+				expect(error.message).to.eq(errorMessage);
+			});
+		});
+	});
+
+	function itStartsRestore(backupRunId) {
+		it('restores specified backup', () => {
 			expect(nockResult.body).to.deep.eq({
 				restoreBackupContext: {
-					backupRunId: backupList[1].id,
+					backupRunId,
 					project: sourceProjectId,
 					instanceId: sourceInstanceId,
 				},
 			});
 		});
-	});
+		itReturnsOperation(operationInProgress);
+	}
+	function itReturnsOperation(op) {
+		it('returns operation', () => {
+			expect(restoreOperation).to.deep.eq(op);
+		});
+	}
 });
 
 function nockGoogle() {
@@ -118,7 +192,7 @@ function nockRestore(targetProjectId, targetInstanceId) {
 		.post(`/sql/v1beta4/projects/${targetProjectId}/instances/${targetInstanceId}/restoreBackup`)
 		.reply((uri, requestBody) => {
 			result.body = requestBody;
-			return [200, {}];
+			return [200, operationInProgress];
 		});
 	return result;
 }
@@ -144,4 +218,22 @@ function nockJwt() {
 			"expires_in": 3599,
 			"token_type": "Bearer"
 		});
+}
+
+function nockOperation(targetProjectId, returnOperation) {
+	nockJwt();
+	nockGoogle()
+		.get(
+			`/sql/v1beta4/projects/${targetProjectId}/operations/1234`
+		)
+		.reply(200, returnOperation);
+}
+
+function nockListOperations(projectId, instanceId) {
+	nockJwt();
+	nockGoogle()
+		.get(
+			`/sql/v1beta4/projects/${projectId}/operations?maxResults=10&instance=${instanceId}`
+		)
+		.reply(200, { items: [operationSuccess, operationInProgress, operationFailed] });
 }
