@@ -1,3 +1,8 @@
+This is a utility to help restore CloudSQL backups accross projects as per the documentation here
+https://cloud.google.com/sql/docs/postgres/backup-recovery/restoring
+
+This has only been tested against Postgres, your results may vary for other database engines.
+
 # Usage
 
 ```js
@@ -72,6 +77,16 @@ cloudsql.instances.get
 cloudsql.instances.list
 cloudsql.instances.restoreBackup
 ```
+
+# Troubleshooting
+
+Some common errors you might encounter
+
+**The client is not authorized to make this request**
+Most likely a permissions error, check IAM.
+
+**This operation is not valid for this instance**
+This error might occur if the target instance does not have enough storage to accommodate the backup. Try increasing storage to be the same as the source instance.
 
 # License
 

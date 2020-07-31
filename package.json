@@ -1,12 +1,18 @@
 {
-  "name": "cloudsql-restore",
+  "name": "@raisely/cloudsql-restore",
   "version": "1.0.0",
   "description": "Restore SQL backups across projects",
   "main": "index.js",
   "scripts": {
     "test": "mocha *.test.js"
   },
-  "author": "",
+  "keywords": [
+	"google",
+	"cloudsql",
+	"backup",
+	"restore"
+  ],
+  "author": "Raisely",
   "license": "NoHarm",
   "dependencies": {
     "google-auth-library": "^6.0.5"
